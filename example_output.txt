@@ -1,0 +1,210 @@
+$ ./build_deploy_test.sh
+Building get_user_dob...
+Current option settings
+errexit         on
+noglob          off
+ignoreeof       off
+interactive     off
+monitor         off
+noexec          off
+stdin           off
+xtrace          off
+verbose         off
+vi              off
+emacs           off
+noclobber       off
+allexport       off
+notify          off
+nounset         off
+nolog           off
+debug           off
++ export PACKAGE=get_user_dob
++ go get github.com/golang/lint/golint
++ cd /go/src/get_user_dob
++ go get -v -t ./...
+github.com/aws/aws-lambda-go (download)
+github.com/aws/aws-sdk-go (download)
+github.com/aws/aws-lambda-go/events
+github.com/aws/aws-lambda-go/lambda/messages
+github.com/aws/aws-lambda-go/lambdacontext
+github.com/aws/aws-lambda-go/lambda
+github.com/aws/aws-sdk-go/aws/awserr
+github.com/aws/aws-sdk-go/internal/shareddefaults
+github.com/aws/aws-sdk-go/vendor/github.com/go-ini/ini
+github.com/aws/aws-sdk-go/aws/endpoints
+github.com/aws/aws-sdk-go/aws/credentials
+github.com/aws/aws-sdk-go/internal/sdkio
+github.com/aws/aws-sdk-go/aws/client/metadata
+github.com/aws/aws-sdk-go/vendor/github.com/jmespath/go-jmespath
+github.com/aws/aws-sdk-go/aws/awsutil
+github.com/aws/aws-sdk-go/internal/sdkrand
+github.com/aws/aws-sdk-go/aws
+github.com/aws/aws-sdk-go/aws/request
+github.com/aws/aws-sdk-go/aws/client
+github.com/aws/aws-sdk-go/aws/corehandlers
+github.com/aws/aws-sdk-go/private/protocol
+github.com/aws/aws-sdk-go/aws/ec2metadata
+github.com/aws/aws-sdk-go/private/protocol/rest
+github.com/aws/aws-sdk-go/private/protocol/query/queryutil
+github.com/aws/aws-sdk-go/private/protocol/xml/xmlutil
+github.com/aws/aws-sdk-go/aws/signer/v4
+github.com/aws/aws-sdk-go/private/protocol/query
+github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds
+github.com/aws/aws-sdk-go/service/sts
+github.com/aws/aws-sdk-go/aws/credentials/endpointcreds
+github.com/aws/aws-sdk-go/aws/defaults
+github.com/aws/aws-sdk-go/aws/credentials/stscreds
+github.com/aws/aws-sdk-go/private/protocol/json/jsonutil
+github.com/aws/aws-sdk-go/aws/session
+github.com/aws/aws-sdk-go/private/protocol/jsonrpc
+github.com/aws/aws-sdk-go/service/dynamodb
+get_user_dob
++ golint -set_exit_status
++ go vet .
++ go test .
+?   	get_user_dob	[no test files]
++ go build -o main ./main.go
+  adding: main (deflated 69%)
+Successfully built get_user_dob
+Building put_user_dob...
+Current option settings
+errexit         on
+noglob          off
+ignoreeof       off
+interactive     off
+monitor         off
+noexec          off
+stdin           off
+xtrace          off
+verbose         off
+vi              off
+emacs           off
+noclobber       off
+allexport       off
+notify          off
+nounset         off
+nolog           off
+debug           off
++ export PACKAGE=put_user_dob
++ go get github.com/golang/lint/golint
++ cd /go/src/put_user_dob
++ go get -v -t ./...
+put_user_dob
++ golint -set_exit_status
++ go vet .
++ go test .
+?   	put_user_dob	[no test files]
++ go build -o main ./main.go
+  adding: main (deflated 69%)
+Successfully built put_user_dob
+
+Trying to get hold of your AWS Account ID
+   if this explodes your AWS CLI is missing or misconfigured
+Got ACCOUNT_ID = REDACTED
+To deploy bigger stack we have to bootstrap smaller stack...
+...this will create a temp bucket for cloudformation templates and lambda code
+...located at s3://REDACTED-cloudformation-temp
+
+Waiting for changeset to be created..
+Waiting for stack create/update to complete
+Successfully created/updated stack - cloudform-bootstrap
+upload: ./get_user_dob.zip to s3://REDACTED-cloudformation-temp/lambda_handlers/03301828/get_user_dob.zip
+upload: ./put_user_dob.zip to s3://REDACTED-cloudformation-temp/lambda_handlers/03301828/put_user_dob.zip
+upload: test/get_user_dob.zip to s3://REDACTED-cloudformation-temp/lambda_handlers/03301828/test/get_user_dob.zip
+Now deploying stack user-dob-rest-service...
+Uploading to 99b0728bf90cb53d0b99a8bf91772eaf.template  11394 / 11394.0  (100.00%)
+Waiting for changeset to be created..
+Waiting for stack create/update to complete
+Successfully created/updated stack - user-dob-rest-service
+--------------------------------------------------------------------------------------
+|                                 DescribeStackEvents                                |
++-----------------------------+----------------------+-------------------------------+
+|           Reason            |       Status         |             Type              |
++-----------------------------+----------------------+-------------------------------+
+|  None                       |  CREATE_COMPLETE     |  AWS::CloudFormation::Stack   |
+|  None                       |  CREATE_COMPLETE     |  AWS::ApiGateway::Deployment  |
+|  None                       |  CREATE_COMPLETE     |  AWS::ApiGateway::Method      |
+|  None                       |  CREATE_COMPLETE     |  AWS::ApiGateway::Method      |
+|  None                       |  CREATE_COMPLETE     |  AWS::Lambda::Permission      |
+|  None                       |  CREATE_COMPLETE     |  AWS::Lambda::Permission      |
+|  None                       |  CREATE_COMPLETE     |  AWS::DynamoDB::Table         |
+|  None                       |  CREATE_COMPLETE     |  AWS::Lambda::Function        |
+|  None                       |  CREATE_COMPLETE     |  AWS::Lambda::Function        |
+|  None                       |  CREATE_COMPLETE     |  AWS::ApiGateway::Account     |
+|  None                       |  CREATE_COMPLETE     |  AWS::IAM::Role               |
+|  None                       |  CREATE_COMPLETE     |  AWS::IAM::Role               |
+|  None                       |  CREATE_COMPLETE     |  AWS::ApiGateway::Resource    |
+|  None                       |  CREATE_COMPLETE     |  AWS::ApiGateway::Resource    |
+|  None                       |  CREATE_COMPLETE     |  AWS::ApiGateway::RestApi     |
++-----------------------------+----------------------+-------------------------------+
+--------------------------------------------------------------------------------------------------------------------------------
+|                                                        DescribeStacks                                                        |
++------------------------------------------------------------------------------------------------------------------------------+
+||                                                           Outputs                                                          ||
+|+-------------------------+------------------------+-------------------------------------------------------------------------+|
+||       Description       |       OutputKey        |                               OutputValue                               ||
+|+-------------------------+------------------------+-------------------------------------------------------------------------+|
+||  The DynamoDB table     |  TableName             |  DateOfBirth                                                            ||
+||  The URL of deployed API|  ApiGatewayInternetUrl |  https://1xiiusbogj.execute-api.eu-west-1.amazonaws.com/DefaultStage/   ||
+|+-------------------------+------------------------+-------------------------------------------------------------------------+|
+
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+getting resource which is not registered...
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+curl: (22) The requested URL returned error: 404 Not Found
+this command should fail with 404 and we ignore curl non-zero exit status
+
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+setting a DOB from the past...
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+getting days to wait for a DOB as we've just set
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+{"message":"Hello ak03301832! Your birthday is in 172 days"}
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+setting a DOB from the near past...
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+getting 364 days to wait for a DOB as we've just set (could be 365 for leap years)
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+{"message":"Hello ak03301832! Your birthday is in 364 days"}
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+setting a DOB from the near future...
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+getting one days to wait for a DOB as we've just set
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+{"message":"Hello ak03301832! Your birthday is in 1 days"}
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+setting a DOB from distant future...
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+getting much more days to wait for a DOB in future
+--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--
+{"message":"Hello ak03301832! Your birthday is in 2729 days"}
+
+all non-ignored curl commands completed with zero exit statuses
+
+ReST API URL (with username parameter): https://1xiiusbogj.execute-api.eu-west-1.amazonaws.com/DefaultStage/hello/ak03301832
+
+$ ./teardown.sh 
+trying to delete user-dob-rest-service stack
+...Succeeded
+trying to delete cloudform-bootstrap stack
+...Succeeded
+Trying to get hold of your AWS Account ID
+
+The bootstrap bucket still survives, and there's no way to force its deletion through CloudFormation
+Let's try to forcefully remove s3://REDACTED-cloudformation-temp.
+
+Bail with Ctrl+C if you'd like to retain it -- sleeping for 10 seconds...
+
+delete: s3://REDACTED-cloudformation-temp/lambda_handlers/03301828/get_user_dob.zip
+delete: s3://REDACTED-cloudformation-temp/99b0728bf90cb53d0b99a8bf91772eaf.template
+delete: s3://REDACTED-cloudformation-temp/lambda_handlers/03301828/test/get_user_dob.zip
+delete: s3://REDACTED-cloudformation-temp/lambda_handlers/03301828/put_user_dob.zip
+remove_bucket: REDACTED-cloudformation-temp

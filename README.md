@@ -1,9 +1,39 @@
-# References for used GoLang tooling
+To build and CloudForm this, you need:
+ * bash, git, curl
+ * AWS CLI 1.44.66+, 
+ * local AWS API Key able to command CloudFormation and IAM Roles 
+ * Docker 17.05+
+ * approx 900MBytes of free disk space
+ 
+Actions:
+ * checkout the repo out locally
+ * run [build_deploy_test.sh](build_deploy_test.sh) (example output [here](example_output.txt))
+ * open the Rest API URL reported by this script in your browser
+ * run [teardown.sh](teardown.sh)
+
+# System diagram
+
+![System Diagram](user-dob-rest-service.png)
+
+The API is exposed via AWS API Gateway, 
+  which is integrated with Amazon Lambda Functions, 
+    which are reading/writing from/to DynamoDB table for persistence.
+
+# All of the below is references and relevant samples 
+ 
+## References for used GoLang tooling
 
 * [AWS SDK -- Docs](https://docs.aws.amazon.com/sdk-for-go/api/aws/)
 * [AWS SDK -- Sources](https://github.com/aws/aws-sdk-go/tree/master/aws)
 * [Proper AWS CodeBuild template](https://github.com/aws-samples/lambda-go-samples/blob/master/buildspec.yml)
 * [GoLang Programming Model for AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/go-programming-model.html)
+* [This is what happens if you try to use alpine-based GoLang Docker to build your Lambdas](https://stackoverflow.com/a/2750413/148926)
+```$shell
+$ readelf -a main.built_in_alpine | grep Requesting
+      [Requesting program interpreter: /lib/ld-musl-x86_64.so.1]
+$ readelf -a main.built_in_ubuntu | grep Requesting
+      [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]
+```
 
 ## Cloudforming API Gateway for Lambda
 
@@ -29,7 +59,7 @@
 * [stelligent template collection](https://github.com/stelligent/cloudformation_templates)
 * [Json to Yaml with CF Designer](https://aws.amazon.com/blogs/mt/the-virtues-of-yaml-cloudformation-and-using-cloudformation-designer-to-convert-json-to-yaml/), but cfn_flip *is* much better
 
-# CI/CD maybes
+## CI/CD maybes
 
 * [vamp](https://vamp.io/)
 * GoCD

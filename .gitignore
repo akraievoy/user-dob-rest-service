@@ -1,5 +1,12 @@
+.idea
+
 bin
 pkg
+
 src/github.com
 src/golang.org
 src/*_user_dob/main
+
+*_user_dob.zip
+
+destroy_before_reading.png

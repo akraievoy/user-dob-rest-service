@@ -6,35 +6,25 @@ export VERSION=$(
   date +%m%d%H%M
 )
 
-export GOPATH=`pwd`
-export GOBIN=${GOPATH}/bin
-export PATH=${PATH}:${GOPATH}/bin
-export DONT_GLOB_JUST_YET='*'
-
-echo "getting golint..."
-go get -v github.com/golang/lint/golint
-echo "golint should be available now"
-
 for PACKAGE in $(ls -1 src | grep _user_dob ) ; do
 
     echo "Building ${PACKAGE}..."
     bash -c "\
         set -e; \
         rm -f bin/${PACKAGE}.zip; \
-        cd src/${PACKAGE}; \
-        go get -v -t ./...; \
-        golint -set_exit_status; \
-        go vet . ; \
-        go test . ; \
-        go build -o main ./${DONT_GLOB_JUST_YET}.go ;
-        zip -9 ../../bin/${PACKAGE}.zip main \
+        docker run --rm -i \
+            -v `pwd`:/go/ \
+            golang:1.9.4 \
+            ./dockerized_go_module_build.sh ${PACKAGE} ; \
+        bash -c \" cd src/${PACKAGE} && zip -9 ../../${PACKAGE}.zip main \" \
     "
     echo "Successfully built ${PACKAGE}"
 
 done
 
-echo "Trying to get hold of your AWS Account ID"
-echo "...if this explodes your aws cli install is missing or misconfigured"
+echo "
+Trying to get hold of your AWS Account ID
+   if this explodes your AWS CLI is missing or misconfigured"
 export ACCOUNT_ID=$(
     aws ec2 describe-security-groups \
         --group-names 'Default' \
@@ -43,9 +33,9 @@ export ACCOUNT_ID=$(
 )
 echo "Got ACCOUNT_ID = ${ACCOUNT_ID}"
 
-echo "To deploy bigger stack we have to bootstrap smaller stack..."
-echo "...this will create a temp bucket for cloudformation templates and lambda code"
-echo "...located at s3://${ACCOUNT_ID}-cloudformation-temp"
+echo "To deploy bigger stack we have to bootstrap smaller stack...
+...this will create a temp bucket for cloudformation templates and lambda code
+...located at s3://${ACCOUNT_ID}-cloudformation-temp"
 aws cloudformation deploy \
     --template-file cloudform-bootstrap.yaml \
     --stack-name cloudform-bootstrap \
@@ -54,7 +44,7 @@ aws cloudformation deploy \
 aws s3 sync \
     --exclude '*' \
     --include '*_user_dob.zip' \
-    bin/ \
+    ./ \
     s3://${ACCOUNT_ID}-cloudformation-temp/lambda_handlers/$VERSION/
 
 echo "Now deploying stack user-dob-rest-service..."
@@ -153,8 +143,11 @@ echo "
 --=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--"
 echo "getting much more days to wait for a DOB in future"
 echo "--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--=--"
-curl --show-error --fail ${CURL_VERBOSITY} ${API_URL}/hello/${USER_NAME}
+curl --show-error --fail ${CURL_VERBOSITY} ${API_URL}hello/${USER_NAME}
 
 echo "
 
-all non-ignored curl commands completed with zero exit statuses"
+all non-ignored curl commands completed with zero exit statuses
+
+ReST API URL (with username parameter): ${API_URL}hello/${USER_NAME}"
+

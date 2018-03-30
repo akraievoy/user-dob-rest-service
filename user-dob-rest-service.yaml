@@ -51,14 +51,14 @@ Parameters:
   LambdaFunctionGetUserDOBReservedConcurrentExecutions:
     Description: LambdaFunction GetUserDOB ReservedConcurrentExecutions
     Type: Number
-    Default: '1'
+    Default: '10'
     MinValue: '1'
     MaxValue: '100'
     ConstraintDescription: must be between 1 and 100
   LambdaFunctionPutUserDOBReservedConcurrentExecutions:
     Description: LambdaFunction PutUserDOB ReservedConcurrentExecutions
     Type: Number
-    Default: '1'
+    Default: '10'
     MinValue: '1'
     MaxValue: '100'
     ConstraintDescription: must be between 1 and 100
