@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Required to bootstrap an empty Amazon Account for ensuing CloudFormation fun
+Parameters:
+  S3BucketCloudFormationTempName:
+    Description: Name for your CloudFormation temp bucket
+    Type: String
+    Default: 'cloudformation-temp'
+    AllowedPattern: '[A-Za-z0-9]+[A-Za-z0-9-]*[A-Za-z0-9]+'
+    MinLength: '3'
+    MaxLength: '20'
+    ConstraintDescription: must contain alnums and hyphens only (at least three)
+Resources:
+  S3BucketCloudFormationTemp:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join
+        - ''
+        - - !Ref AWS::AccountId
+          - '-'
+          - !Ref S3BucketCloudFormationTempName
+    DeletionPolicy: Retain

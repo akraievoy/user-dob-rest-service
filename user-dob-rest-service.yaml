@@ -1,0 +1,347 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: API Gateway <-> Lambda function <-> DynamoDB Table
+Parameters:
+  CodeVersion:
+    Type: Number
+    ConstraintDescription: this is generated at the moment code is built
+  DynamoTableDateOfBirthName:
+    Description: DynamoTable DateOfBirth Name
+    Type: String
+    Default: DateOfBirth
+    AllowedPattern: '[A-Za-z0-9]*'
+    MinLength: '1'
+    MaxLength: '64'
+    ConstraintDescription: must contain only alphanumeric characters (1-64 chars)
+  DynamoTableDateOfBirthReadCapacityUnits:
+    Description: DynamoTable DateOfBirth ProvisionedReadCapacity
+    Type: Number
+    Default: '1'
+    MinValue: '1'
+    MaxValue: '10'
+    ConstraintDescription: must be between 1 and 10
+  DynamoTableDateOfBirthWriteCapacityUnits:
+    Description: DynamoTable DateOfBirth ProvisionedWriteCapacity
+    Type: Number
+    Default: '1'
+    MinValue: '1'
+    MaxValue: '10'
+    ConstraintDescription: must be between 1 and 10
+  LambdaFunctionGetUserDOBCodeS3Key:
+    Description: LambdaFunction GetUserDOB CodeS3Key - appended to lambda_handlers/$CodeVersion
+    Type: String
+    Default: 'get_user_dob.zip'
+  LambdaFunctionPutUserDOBCodeS3Key:
+    Description: LambdaFunction PutUserDOB CodeS3Key - appended to lambda_handlers/$CodeVersion
+    Type: String
+    Default: 'put_user_dob.zip'
+  LambdaFunctionGetUserDOBMemorySize:
+    Description: LambdaFunction GetUserDOB MemorySize
+    Type: Number
+    Default: '128'
+    MinValue: '128'
+    MaxValue: '512'
+    ConstraintDescription: must be multiple of 64, between 128 and 512
+  LambdaFunctionPutUserDOBMemorySize:
+    Description: LambdaFunction PutUserDOB MemorySize
+    Type: Number
+    Default: '128'
+    MinValue: '128'
+    MaxValue: '512'
+    ConstraintDescription: must be multiple of 64, between 128 and 512
+  LambdaFunctionGetUserDOBReservedConcurrentExecutions:
+    Description: LambdaFunction GetUserDOB ReservedConcurrentExecutions
+    Type: Number
+    Default: '1'
+    MinValue: '1'
+    MaxValue: '100'
+    ConstraintDescription: must be between 1 and 100
+  LambdaFunctionPutUserDOBReservedConcurrentExecutions:
+    Description: LambdaFunction PutUserDOB ReservedConcurrentExecutions
+    Type: Number
+    Default: '1'
+    MinValue: '1'
+    MaxValue: '100'
+    ConstraintDescription: must be between 1 and 100
+  LambdaFunctionGetUserDOBTimeout:
+    Description: LambdaFunction GetUserDOB Timeout
+    Type: Number
+    Default: '1'
+    MinValue: '1'
+    MaxValue: '10'
+    ConstraintDescription: must be between 1 and 10
+  LambdaFunctionPutUserDOBTimeout:
+    Description: LambdaFunction PutUserDOB Timeout
+    Type: Number
+    Default: '1'
+    MinValue: '1'
+    MaxValue: '10'
+    ConstraintDescription: must be between 1 and 10
+  ApiGatewayDeploymentStageDateOfBirthName:
+    Description: ApiGatewayDeployemntStage DateOfBirth Name
+    Type: String
+    Default: DefaultStage
+    AllowedPattern: '[A-Za-z0-9]*'
+    MinLength: '1'
+    MaxLength: '64'
+    ConstraintDescription: must contain only alphanumeric characters (1-64 chars)
+Resources:
+  DynamoDBTableDateOfBirth:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      # referring ONLY to keys here, non-key fields are free-form
+      AttributeDefinitions:
+        - AttributeName: username
+          AttributeType: S
+      KeySchema:
+        - AttributeName: username
+          KeyType: HASH
+      TableName: !Ref DynamoTableDateOfBirthName
+      ProvisionedThroughput:
+        ReadCapacityUnits: !Ref DynamoTableDateOfBirthReadCapacityUnits
+        WriteCapacityUnits: !Ref DynamoTableDateOfBirthWriteCapacityUnits
+  IamRoleForLambdaPrincipal:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Join
+            - '-'
+            - - !Ref AWS::StackName
+              - LambdaPrincipal
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                Resource: !Join
+                  - ''
+                  - - 'arn:aws:dynamodb:'
+                    - !Ref 'AWS::Region'
+                    - ':'
+                    - !Ref 'AWS::AccountId'
+                    - :table/
+                    - !Ref DynamoTableDateOfBirthName
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+  LambdaFunctionGetUserDOB:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Join
+          - '-'
+          - - !Ref AWS::AccountId
+            - 'cloudformation-temp'
+        S3Key: !Join
+        - '/'
+        - - lambda_handlers
+          - !Ref CodeVersion
+          - !Ref LambdaFunctionGetUserDOBCodeS3Key
+      FunctionName: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - GetUserDOB
+      Handler: main
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoTableDateOfBirthName
+      Role: !GetAtt IamRoleForLambdaPrincipal.Arn
+      Runtime: go1.x
+      ReservedConcurrentExecutions: !Ref LambdaFunctionGetUserDOBReservedConcurrentExecutions
+      MemorySize: !Ref LambdaFunctionGetUserDOBMemorySize
+      Timeout: !Ref LambdaFunctionGetUserDOBTimeout
+  LambdaFunctionPutUserDOB:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Join
+          - '-'
+          - - !Ref AWS::AccountId
+            - 'cloudformation-temp'
+        S3Key: !Join
+        - '/'
+        - - lambda_handlers
+          - !Ref CodeVersion
+          - !Ref LambdaFunctionPutUserDOBCodeS3Key
+      FunctionName: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - PutUserDOB
+      Handler: main
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoTableDateOfBirthName
+      Role: !GetAtt IamRoleForLambdaPrincipal.Arn
+      Runtime: go1.x
+      ReservedConcurrentExecutions: !Ref LambdaFunctionPutUserDOBReservedConcurrentExecutions
+      MemorySize: !Ref LambdaFunctionPutUserDOBMemorySize
+      Timeout: !Ref LambdaFunctionPutUserDOBTimeout
+  ApiGatewayRestApiDateOfBirth:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - DateOfBirth
+      Description: DateOfBirth ApiGateway RestAPI
+      FailOnWarnings: true
+  PermissionLambdaFunctionGetUserDOB:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt LambdaFunctionGetUserDOB.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Join
+        - ''
+        - - 'arn:aws:execute-api:'
+          - !Ref AWS::Region
+          - ':'
+          - !Ref AWS::AccountId
+          - ':'
+          - !Ref ApiGatewayRestApiDateOfBirth
+          - '/*'
+  PermissionLambdaFunctionPutUserDOB:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt LambdaFunctionPutUserDOB.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Join
+        - ''
+        - - 'arn:aws:execute-api:'
+          - !Ref AWS::Region
+          - ':'
+          - !Ref AWS::AccountId
+          - ':'
+          - !Ref ApiGatewayRestApiDateOfBirth
+          - '/*'
+  IamRoleForApiGatewayPrincipal:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Join
+            - '-'
+            - - !Ref AWS::StackName
+              - ApiGatewayPrincipal
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:GetLogEvents
+                  - logs:FilterLogEvents
+                Resource: '*'
+  ApiGatewayAccountDateOfBirth:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt IamRoleForApiGatewayPrincipal.Arn
+  ApiGatewayResourceDateOfBirth:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApiDateOfBirth
+      ParentId: !GetAtt ApiGatewayRestApiDateOfBirth.RootResourceId
+      PathPart: hello
+  ApiGatewayResourceUserName:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApiDateOfBirth
+      ParentId: !Ref ApiGatewayResourceDateOfBirth
+      PathPart: '{username}'
+  ApiGatewayMethodGetDateOfBirth:
+    Type: AWS::ApiGateway::Method
+    DependsOn: PermissionLambdaFunctionGetUserDOB
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApiDateOfBirth
+      ResourceId: !Ref ApiGatewayResourceUserName
+      AuthorizationType: None
+      HttpMethod: GET
+      RequestParameters:
+        method.request.path.username: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        RequestParameters:
+          integration.request.path.username: method.request.path.username
+        Uri: !Join
+          - ''
+          - - 'arn:aws:apigateway:'
+            - !Ref AWS::Region
+            - ':lambda:path/2015-03-31/functions/'
+            - !GetAtt LambdaFunctionGetUserDOB.Arn
+            - '/invocations'
+  ApiGatewayMethodPutDateOfBirth:
+    Type: AWS::ApiGateway::Method
+    DependsOn: PermissionLambdaFunctionPutUserDOB
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApiDateOfBirth
+      ResourceId: !Ref ApiGatewayResourceUserName
+      AuthorizationType: None
+      HttpMethod: PUT
+      RequestParameters:
+        method.request.path.username: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        RequestParameters:
+          integration.request.path.username: method.request.path.username
+        Uri: !Join
+          - ''
+          - - 'arn:aws:apigateway:'
+            - !Ref AWS::Region
+            - ':lambda:path/2015-03-31/functions/'
+            - !GetAtt LambdaFunctionPutUserDOB.Arn
+            - '/invocations'
+  ApiGatewayDeploymentDateOfBirth:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayMethodGetDateOfBirth
+      - ApiGatewayMethodPutDateOfBirth
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApiDateOfBirth
+      StageName: !Ref ApiGatewayDeploymentStageDateOfBirthName
+Outputs:
+  TableName:
+    Description: The DynamoDB table
+    Value: !Ref DynamoDBTableDateOfBirth
+  ApiGatewayInternetUrl:
+    Description: The URL of deployed API
+    Value: !Join
+     - ''
+     - - 'https://'
+       - !Ref ApiGatewayRestApiDateOfBirth
+       - '.execute-api.'
+       - !Ref AWS::Region
+       - '.amazonaws.com/'
+       - !Ref ApiGatewayDeploymentStageDateOfBirthName
+       - '/'
