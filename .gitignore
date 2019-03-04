@@ -1,0 +1,5 @@
+/.idea
+/go_pkg_mod
+/vendor
+/sender/sender
+/upserter/upserter
