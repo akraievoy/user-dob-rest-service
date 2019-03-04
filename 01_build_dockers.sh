@@ -25,6 +25,7 @@ docker-compose rm -f
 echo "STEP 4: purging previously built and now untagged docker images"
 
 docker images | grep '<none>' | sed -E 's/\s+/\t/g' | cut -f 3 | xargs -r docker rmi -f
+docker system prune --volumes --force
 
 echo "STEP 5: building dockers"
 
