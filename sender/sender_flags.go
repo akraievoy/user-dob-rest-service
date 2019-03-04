@@ -1,27 +1,35 @@
 package main
 
 import (
-	"flag"
 	"errors"
+	"flag"
+	"github.com/facebookgo/flagenv"
 )
 
 type SenderFlags struct {
-	InFilePath  string
-	BatchSize   uint32
-	UpserterHost string
-	UpserterPort uint32
+	InFilePath        string
+	BrokenLinesToFail uint32
+	BatchSize         uint32
+	UpserterHost      string
+	UpserterPort      uint32
 }
 
 func ParseSenderFlags() (*SenderFlags, error) {
 	inFilePath := flag.String(
 		"in-file-path",
-		"",
-		"path to input file, emptry string denotes stdin",
+		"-",
+		"path to input file, dash denotes stdin",
+	)
+
+	brokenLinesToFail := flag.Uint(
+		"broken-lines-to-fail",
+		64,
+		"after this many broken lines process fails with error, up to 8192, inclusive",
 	)
 
 	batchSize := flag.Uint(
 		"batch-size",
-		64,
+		32,
 		"upsert batch size, up to 1024, inclusive",
 	)
 
@@ -37,8 +45,12 @@ func ParseSenderFlags() (*SenderFlags, error) {
 		"upserter service port to send your data to",
 	)
 
+	flagenv.Parse()
 	flag.Parse()
 
+	if *brokenLinesToFail > uint(8192) {
+		return nil, errors.New("broken-lines-to-fail exceeds 8192")
+	}
 	if *batchSize > uint(1024) {
 		return nil, errors.New("batch-size exceeds 1024")
 	}
@@ -51,6 +63,7 @@ func ParseSenderFlags() (*SenderFlags, error) {
 
 	return &SenderFlags{
 		*inFilePath,
+		uint32(*brokenLinesToFail),
 		uint32(*batchSize),
 		*upserterUrl,
 		uint32(*upserterPort),

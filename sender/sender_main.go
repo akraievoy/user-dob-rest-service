@@ -1,108 +1,208 @@
 package main
 
 import (
-	"log"
-	"os"
-	"fmt"
-)
-
-import (
-	"github.com/akraievoy/tsv_load/parser"
-	"google.golang.org/grpc"
 	"bufio"
 	"context"
-	"github.com/akraievoy/tsv_load/proto"
-	"strconv"
 	"errors"
+	"fmt"
+	"github.com/akraievoy/tsv_load/parser"
+	"github.com/akraievoy/tsv_load/proto"
+	"github.com/akraievoy/tsv_load/service_utils"
+	"google.golang.org/grpc"
+	"log"
+	"os"
+	"strconv"
+	"time"
 )
 
 func main() {
+	sendContext, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	go service_utils.CancelOnTermSignal(cancelFunc)
+
 	senderFlags, err := ParseSenderFlags()
 	if err != nil {
-		log.Fatal("failed to parse arguments", err)
+		log.Fatal("failed to parse arguments: ", err)
 	}
 
+	closeFunc, upserterClient, err := newUpserterClient(sendContext, senderFlags)
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+	if err != nil {
+		log.Fatal("failed to establish gRPC connection: ", err)
+	}
+
+	reader, readerCloseFunc, err := newReader(senderFlags)
+	if readerCloseFunc != nil {
+		defer readerCloseFunc()
+	}
+	if err != nil {
+		log.Fatal("failed to open data reader: ", err)
+	}
+
+	stream, err := parser.NewRecordStream(reader)
+	if err != nil {
+		log.Fatal("failed to parse CSV header: ", err)
+	}
+
+	stats, err := stream.ForEachBatch(
+		sendContext,
+		senderFlags.BatchSize,
+		senderFlags.BrokenLinesToFail,
+		senderFunc(upserterClient),
+	)
+
+	log.Printf(
+		"Completed: %d records successfully processed, %d records failed",
+		stats.Successes, len(stats.FailedLineNumbers),
+	)
+	if err != nil {
+		log.Fatal("failed to process data fully: ", err)
+	}
+}
+
+func senderFunc(upserterClient proto.UpserterClient) func(ctx context.Context, rs []parser.Record) ([]uint64, error) {
+	return func(ctx context.Context, rs []parser.Record) ([]uint64, error) {
+		userBatch := proto.UserBatch{}
+		failedLineNumbers := make([]uint64, 0)
+		rsSent := make([]parser.Record, 0)
+
+		for _, r := range rs {
+			user, err := tsvToDomain(r)
+			if err == nil {
+				userBatch.Batch = append(userBatch.Batch, user)
+				rsSent = append(rsSent, r)
+			} else {
+				log.Printf("row #%d format error: %v", r.LineNumber(), err)
+				failedLineNumbers = append(failedLineNumbers, r.LineNumber())
+			}
+		}
+
+		feedback, err := upserterClient.Upsert(ctx, &userBatch)
+
+		if err != nil {
+			log.Printf(
+				"whole batch of rows #%d..%d failed: %v",
+				rs[0].LineNumber(), rs[len(rs)-1].LineNumber(), err,
+			)
+		}
+
+		if feedback != nil {
+			if len(rsSent) != len(feedback.Feedbacks) {
+				message := fmt.Sprintf(
+					"whole batch of rows #%d..%d failed: feedback length mismatch",
+					rs[0].LineNumber(), rs[len(rs)-1].LineNumber(),
+				)
+				log.Printf(message)
+				return failedLineNumbers, errors.New(message)
+			}
+
+			for i, f := range feedback.Feedbacks {
+				if !f.Success {
+					log.Printf("remote failure for row #%d: %v", rsSent[i].LineNumber(), f.ErrorMessage)
+					failedLineNumbers = append(failedLineNumbers, rsSent[i].LineNumber())
+				}
+			}
+		}
+
+		return failedLineNumbers, err
+	}
+}
+
+func tsvToDomain(r parser.Record) (*proto.User, error) {
+	idStr, err := r.GetValue("id")
+	if err != nil {
+		return nil, err
+	}
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("id field is not a valid uint32: %v", err))
+	}
+	name, err := r.GetValue("name")
+	if err != nil {
+		return nil, err
+	}
+	email, err := r.GetValue("email")
+	if err != nil {
+		return nil, err
+	}
+	mobile, err := r.GetValue("mobile_number")
+	if err != nil {
+		return nil, err
+	}
+
+	var user proto.User
+
+	user.Id = int32(id)
+	user.Name = name
+	user.Email = email
+	user.PhoneNumber = mobile
+
+	return &user, nil
+}
+
+func newReader(senderFlags *SenderFlags) (*bufio.Reader, func(), error) {
 	var reader *bufio.Reader = nil
-	if senderFlags.InFilePath != "" {
+	var readerCloseFunc func() = nil
+	if senderFlags.InFilePath != "-" {
 		opened, err := os.Open(senderFlags.InFilePath)
 		if err != nil {
-			log.Fatal(fmt.Sprintf("failed on opening file %s", senderFlags.InFilePath), err)
+			return nil, nil, err
 		}
-		defer opened.Close()
-
+		readerCloseFunc = func() {
+			err := opened.Close()
+			if err != nil {
+				log.Print("failed to close file being read:", err)
+			}
+		}
 		reader = bufio.NewReader(opened)
 	} else {
 		reader = bufio.NewReader(os.Stdin)
 	}
 
-	stream, err := parser.NewRecordStream(reader)
-	if err != nil {
-		log.Fatal("failed to parse CSV header", err)
-	}
+	return reader, readerCloseFunc, nil
+}
 
-	conn, err := grpc.Dial(
-		fmt.Sprintf("%s:%d", senderFlags.UpserterHost, senderFlags.UpserterPort),
-		grpc.WithInsecure(),
-	)
-	if err != nil {
-		log.Fatal("failed to dial", err)
+func newUpserterClient(sendContext context.Context, senderFlags *SenderFlags) (func(), proto.UpserterClient, error) {
+	var conn *grpc.ClientConn
+	var closeFunc func()
+	var err error
+	for {
+		dialAddr := fmt.Sprintf("%s:%d", senderFlags.UpserterHost, senderFlags.UpserterPort)
+		log.Printf("dialling %s...", dialAddr)
+		conn, err = grpc.Dial(dialAddr, grpc.WithInsecure())
+		if err == nil {
+			closeFunc = func() {
+				err := conn.Close()
+				if err != nil {
+					log.Print("error while closing gRPC connection:", err)
+				}
+			}
+			log.Printf("dialling %s successful", dialAddr)
+			break
+		} else {
+			log.Printf("failed to dial %s (retrying in 5 sec): %v", dialAddr, err)
+			if service_utils.SleepCancellably(sendContext, time.Second*5) {
+				return nil, nil, errors.New("cancelled while dialling to upserter")
+			}
+		}
 	}
-	defer conn.Close()
 
 	upserterClient := proto.NewUpserterClient(conn)
 
-	sendContext, cancelFunc := context.WithCancel(context.Background())
-	defer cancelFunc()
-
-	stream.ForEachBatch(
-		sendContext,
-		senderFlags.BatchSize,
-		func(ctx context.Context, rs []parser.Record) []error {
-			userBatch := proto.UserBatch{}
-
-			for _, r := range rs {
-				idStr, idStrErr := r.GetValue("id")
-				name, nameErr := r.GetValue("name")
-				email, emailErr := r.GetValue("email")
-				mobile, mobileErr := r.GetValue("mobile_number")
-				if idStrErr != nil || nameErr != nil || emailErr != nil || mobileErr != nil {
-					log.Printf("some fields missing: %v", []error{idStrErr, nameErr, emailErr, mobileErr})
-				}
-
-				id, err := strconv.ParseUint(idStr, 10, 32)
-				if err != nil {
-					log.Print("id field is not a valid uint32", err)
-				}
-
-				var user proto.User
-				user.Id = int32(id)
-				user.Name = name
-				user.Email = email
-				user.PhoneNumber = mobile
-				userBatch.Batch = append(userBatch.Batch, &user)
+	for {
+		versionResponse, err := upserterClient.Version(sendContext, &proto.VersionRequest{})
+		if err == nil {
+			log.Printf("connected to upserter version: %v", versionResponse.Version)
+			break
+		} else {
+			log.Printf("failed to query upserter version (retrying in 5 sec): %v", err)
+			if service_utils.SleepCancellably(sendContext, time.Second*5) {
+				return closeFunc, nil, errors.New("cancelled while verifying upserter version")
 			}
+		}
+	}
 
-			result := make([]error, 0)
-			feedback, err := upserterClient.Upsert(ctx, &userBatch)
-
-			if err != nil {
-				log.Printf("whole batch failed with", err)
-				for range rs {
-					result = append(result, err)
-				}
-			} else {
-				for _, f := range feedback.Feedbacks {
-					if f.Success {
-						log.Printf("got one success")
-						result = append(result, nil)
-					} else {
-						log.Printf("got one failure", f.ErrorMessage)
-						result = append(result, errors.New(f.ErrorMessage))
-					}
-				}
-			}
-
-			return result
-		},
-	)
+	return closeFunc, upserterClient, nil
 }

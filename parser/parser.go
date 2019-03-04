@@ -1,17 +1,18 @@
 package parser
 
 import (
-	"context"
 	"bufio"
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"github.com/akraievoy/tsv_load/service_utils"
 	"io"
 )
 
 type Record interface {
 	GetValue(key string) (string, error)
-	LineNumber() uint64 // LATER this feels redundant
+	LineNumber() uint64
 }
 
 type ProcessingStats struct {
@@ -23,7 +24,8 @@ type RecordStream interface {
 	ForEachBatch(
 		ctx context.Context,
 		batchSize uint32,
-		callback func(context.Context, []Record) []error,
+		brokenLinesToFail uint32,
+		callback func(context.Context, []Record) ([]uint64, error),
 	) (ProcessingStats, error)
 }
 
@@ -50,27 +52,26 @@ type csvRecordStream struct {
 func (rs csvRecordStream) ForEachBatch(
 	ctx context.Context,
 	batchSize uint32,
-	callback func(context.Context, []Record) []error,
+	brokenLinesToFail uint32,
+	callback func(context.Context, []Record) ([]uint64, error),
 ) (ProcessingStats, error) {
 	buffer := make([]Record, 0, batchSize)
 	successes := uint64(0)
-	failedLineNumbers := make([]uint64, 0)
+	brokenLineNumbers := make([]uint64, 0)
 	thereIsMore := true
 	for thereIsMore {
 		values, err := rs.reader.Read()
 
-		select {
-		case <-ctx.Done():
+		if service_utils.PeekDone(ctx) {
 			thereIsMore = false
-			return ProcessingStats{ successes, failedLineNumbers}, ctx.Err()
-		default:
+			return ProcessingStats{successes, brokenLineNumbers}, ctx.Err()
 		}
 
 		if err == io.EOF {
 			thereIsMore = false
 		} else if err != nil {
 			//	LATER recover from some CSV-specific errors as well (should we send last pre-bail buffer or not)?
-			return ProcessingStats{ successes, failedLineNumbers}, err
+			return ProcessingStats{successes, brokenLineNumbers}, err
 		}
 
 		rs.lineNumber += 1
@@ -79,19 +80,24 @@ func (rs csvRecordStream) ForEachBatch(
 		}
 
 		if len(buffer) == int(batchSize) || !thereIsMore {
-			callbackErrors := callback(ctx, buffer)
-			for idx, err := range callbackErrors {
-				if err == nil {
-					successes += 1
-					continue
-				}
-				failedLineNumbers = append(failedLineNumbers, buffer[idx].LineNumber())
+			batchBrokenLineNumbers, batchErr := callback(ctx, buffer)
+			if batchErr == nil {
+				successes += uint64(len(buffer) - len(batchBrokenLineNumbers))
 			}
+			brokenLineNumbers = append(brokenLineNumbers, batchBrokenLineNumbers...)
 			buffer = buffer[:0]
+		}
+
+		if uint32(len(brokenLineNumbers)) > brokenLinesToFail {
+			message := fmt.Sprintf(
+				"seen %d broken lines, which is greated than limit of %d",
+				len(brokenLineNumbers), brokenLinesToFail,
+			)
+			return ProcessingStats{successes, brokenLineNumbers}, errors.New(message)
 		}
 	}
 
-	return ProcessingStats{successes, failedLineNumbers}, nil
+	return ProcessingStats{successes, brokenLineNumbers}, nil
 }
 
 type csvRecord struct {
