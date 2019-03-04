@@ -20,37 +20,37 @@ func main() {
 	defer cancelFunc()
 	go service_utils.CancelOnTermSignal(cancelFunc)
 
-	senderFlags, err := ParseSenderFlags()
+	iFlags, err := ParseSenderFlags()
 	if err != nil {
-		log.Fatal("failed to parse arguments: ", err)
+		log.Fatalf("failed to parse arguments: %v", err)
 	}
 
-	closeFunc, upserterClient, err := newUpserterClient(sendContext, senderFlags)
+	closeFunc, upserterClient, err := newUpserterClient(sendContext, iFlags)
 	if closeFunc != nil {
 		defer closeFunc()
 	}
 	if err != nil {
-		log.Fatal("failed to establish gRPC connection: ", err)
+		log.Fatalf("failed to establish gRPC connection: %v", err)
 	}
 
-	reader, readerCloseFunc, err := newReader(senderFlags)
+	reader, readerCloseFunc, err := newReader(iFlags)
 	if readerCloseFunc != nil {
 		defer readerCloseFunc()
 	}
 	if err != nil {
-		log.Fatal("failed to open data reader: ", err)
+		log.Fatalf("failed to open data reader: %v", err)
 	}
 
 	stream, err := parser.NewRecordStream(reader)
 	if err != nil {
-		log.Fatal("failed to parse CSV header: ", err)
+		log.Fatalf("failed to parse CSV header: %v", err)
 	}
 
 	stats, err := stream.ForEachBatch(
 		sendContext,
-		senderFlags.BatchSize,
-		senderFlags.BrokenLinesToFail,
-		senderFunc(upserterClient),
+		iFlags.BatchSize,
+		iFlags.BrokenLinesToFail,
+		ingestorFunc(upserterClient),
 	)
 
 	log.Printf(
@@ -58,11 +58,11 @@ func main() {
 		stats.Successes, len(stats.FailedLineNumbers),
 	)
 	if err != nil {
-		log.Fatal("failed to process data fully: ", err)
+		log.Fatalf("failed to process data fully: %v", err)
 	}
 }
 
-func senderFunc(upserterClient proto.UpserterClient) func(ctx context.Context, rs []parser.Record) ([]uint64, error) {
+func ingestorFunc(upserterClient proto.UpserterClient) func(ctx context.Context, rs []parser.Record) ([]uint64, error) {
 	return func(ctx context.Context, rs []parser.Record) ([]uint64, error) {
 		userBatch := proto.UserBatch{}
 		failedLineNumbers := make([]uint64, 0)
@@ -142,7 +142,7 @@ func tsvToDomain(r parser.Record) (*proto.User, error) {
 	return &user, nil
 }
 
-func newReader(senderFlags *SenderFlags) (*bufio.Reader, func(), error) {
+func newReader(senderFlags *IngestorFlags) (*bufio.Reader, func(), error) {
 	var reader *bufio.Reader = nil
 	var readerCloseFunc func() = nil
 	if senderFlags.InFilePath != "-" {
@@ -164,7 +164,7 @@ func newReader(senderFlags *SenderFlags) (*bufio.Reader, func(), error) {
 	return reader, readerCloseFunc, nil
 }
 
-func newUpserterClient(sendContext context.Context, senderFlags *SenderFlags) (func(), proto.UpserterClient, error) {
+func newUpserterClient(sendContext context.Context, senderFlags *IngestorFlags) (func(), proto.UpserterClient, error) {
 	var conn *grpc.ClientConn
 	var closeFunc func()
 	var err error

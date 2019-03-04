@@ -6,7 +6,7 @@ import (
 	"github.com/facebookgo/flagenv"
 )
 
-type SenderFlags struct {
+type IngestorFlags struct {
 	InFilePath        string
 	BrokenLinesToFail uint32
 	BatchSize         uint32
@@ -14,7 +14,7 @@ type SenderFlags struct {
 	UpserterPort      uint32
 }
 
-func ParseSenderFlags() (*SenderFlags, error) {
+func ParseSenderFlags() (*IngestorFlags, error) {
 	inFilePath := flag.String(
 		"in-file-path",
 		"-",
@@ -61,7 +61,7 @@ func ParseSenderFlags() (*SenderFlags, error) {
 		return nil, errors.New("upserter-port exceeds 65535")
 	}
 
-	return &SenderFlags{
+	return &IngestorFlags{
 		*inFilePath,
 		uint32(*brokenLinesToFail),
 		uint32(*batchSize),

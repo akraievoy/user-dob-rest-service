@@ -1,5 +1,5 @@
 /.idea
 /go_pkg_mod
 /vendor
-/sender/sender
+/ingestor/ingestor
 /upserter/upserter

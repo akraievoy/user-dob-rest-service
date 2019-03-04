@@ -24,6 +24,6 @@ else
 
   echo "STEP 4: vendoring library dependencies"
   go mod vendor
-  go get ./parser ./sender ./upserter
+  go get ./parser ./ingestor ./upserter
 
 fi

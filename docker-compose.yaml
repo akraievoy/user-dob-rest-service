@@ -21,13 +21,13 @@ services:
       - 8080:8080
     environment:
       - DB_PASSWORD=bazinga
-  sender:
-    image: sender
-    container_name: sender
+  ingestor:
+    image: ingestor
+    container_name: ingestor
     restart: "no"
     depends_on:
       - upserter
-    build: ./sender
+    build: ingestor
     volumes:
       - ./sender-data:/data
     environment:

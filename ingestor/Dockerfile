@@ -1,6 +1,6 @@
 FROM alpine:3.9
 
-COPY sender /
+COPY ingestor /
 
 ENV IN_FILE_PATH=localhost
 ENV BROKEN_LINES_TO_FAIL=64
@@ -8,4 +8,4 @@ ENV BATCH_SIZE=32
 ENV UPSERTER_HOST=upserter
 ENV UPSERTER_PORT=8080
 
-CMD [ "/sender" ]
+CMD [ "/ingestor" ]
