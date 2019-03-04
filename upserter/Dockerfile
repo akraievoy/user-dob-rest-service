@@ -15,6 +15,5 @@ ENV DB_PASSWORD=fillmein
 ENV DB_NAME=upserter
 
 CMD [ \
-  "/bin/sh", "-c", \
-  "/wait_for_postgres.sh /upserter -bind-host ${BIND_HOST} -bind-port ${BIND_PORT} -db-host ${DB_HOST} -db-port ${DB_PORT} -db-username ${DB_USERNAME} -db-password ${DB_PASSWORD}" \
+  "/wait_for_postgres.sh", "/upserter" \
 ]

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"flag"
 	"errors"
+	"flag"
+	"github.com/facebookgo/flagenv"
 )
 
 type UpserterFlags struct {
@@ -58,6 +59,7 @@ func ParseUpserterFlags() (*UpserterFlags, error) {
 		"authienticate with database using given password",
 	)
 
+	flagenv.Parse()
 	flag.Parse()
 
 	if *bindPort == uint(0) {
