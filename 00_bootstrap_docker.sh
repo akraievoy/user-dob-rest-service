@@ -2,7 +2,7 @@
 
 set -o errexit
 
-if "$1" != "force" && test -d /tsv_load/vendor ; then
+if [ "z$1" != "zforce" ]  && test -d /tsv_load/vendor/ ; then
   echo libs already vendored, skipping
 else
   echo "STEP 1: installing git and protobuf (in golang docker)"
