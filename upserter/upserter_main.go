@@ -30,26 +30,34 @@ func (us *UpserterServer) Upsert(ctx context.Context, users *proto.UserBatch) (*
 		log.Printf("failed to prepare statement: %v", err)
 		return nil, err
 	}
-	defer stmt.Close()
+	defer func() {
+		closeErr := stmt.Close()
+		if closeErr != nil {
+			log.Printf("error on closing prepared Stmt: %v", closeErr)
+		}
+	}()
 
 	result := make([]*proto.UpsertFeedback, 0)
+	successes := 0
 	for _, u := range users.Batch {
-		execRes, err := stmt.Exec(uint32(u.Id), u.Name, u.Email, "", u.PhoneNumber)
+		_, err := stmt.Exec(uint32(u.Id), u.Name, u.Email, "", u.PhoneNumber)
 		feedback := proto.UpsertFeedback{}
 		if err == nil {
-			insertId, insertIdErr := execRes.LastInsertId()
-			rowsAffected, rowsAffectedErr := execRes.RowsAffected()
-			log.Printf("exec result %d (%v) %d (%v)", insertId, insertIdErr, rowsAffected, rowsAffectedErr)
 			feedback.Success = true
+			successes += 1
 		} else {
-			log.Print("failed to upsert record", err)
+			log.Printf("failed to upsert record: %v", err)
 			feedback.Success = false
 			feedback.ErrorMessage = fmt.Sprintf("%v", err)
 		}
 		result = append(result, &feedback)
 	}
 
-	log.Printf("upserted %d records", len(users.Batch))
+	if len(users.Batch) == successes {
+		log.Printf("upserted %d records ", len(users.Batch))
+	} else {
+		log.Printf("attempted to upsert %d records, of those %d successfully ", len(users.Batch), successes)
+	}
 
 	batchFeedback := proto.BatchFeedback{}
 	batchFeedback.Feedbacks = result
@@ -58,7 +66,7 @@ func (us *UpserterServer) Upsert(ctx context.Context, users *proto.UserBatch) (*
 
 func (us *UpserterServer) Version(ctx context.Context, verReq *proto.VersionRequest) (*proto.VersionResponse, error) {
 	var versionResp proto.VersionResponse
-	versionResp.Version = "0.0.1"
+	versionResp.Version = "0.1.0"
 	return &versionResp, nil
 }
 
@@ -77,7 +85,7 @@ func main() {
 		defer dbCloseFunc()
 	}
 	if err != nil {
-		log.Fatal("failed to init DB connection pool: %v", err)
+		log.Fatalf("failed to init DB connection pool: %v", err)
 	}
 
 	toBindTo := fmt.Sprintf("%s:%d", uFlags.BindHost, uFlags.BindPort)
@@ -91,11 +99,21 @@ func main() {
 
 	proto.RegisterUpserterServer(grpcServer, &server)
 
-	err = grpcServer.Serve(listen)
-	if err != nil {
-		log.Fatal("failed to serve %v", err)
-	}
+	go func() {
+		err := grpcServer.Serve(listen)
+		if err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
+	defer func() {
+		// LATER something kills us before those logs reach docker compose muxer, EEWWW
+		log.Printf("received signal, closing gRPC endpoint and exiting")
+		grpcServer.GracefulStop()
+	}()
 
+	for !service_utils.SleepCancellably(mainContext, time.Minute) {
+		//	intentionally left empty
+	}
 }
 
 func initDatabaseConnPool(mainContext context.Context, uFlags *UpserterFlags) (*sql.DB, func(), error) {
@@ -109,6 +127,7 @@ func initDatabaseConnPool(mainContext context.Context, uFlags *UpserterFlags) (*
 		return nil, nil, err
 	}
 	dbCloseFunc := func() {
+		log.Printf("closing DB")
 		err := db.Close()
 		if err != nil {
 			log.Printf("failure on closing DB: %v", err)
