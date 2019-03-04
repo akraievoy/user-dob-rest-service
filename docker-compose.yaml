@@ -1,0 +1,34 @@
+version: "3"
+services:
+  postgres:
+    image: postgres:9.6.12
+    container_name: postgres
+    restart: "no"
+    environment:
+      - POSTGRES_PASSWORD=bazinga
+      - POSTGRES_USER=upserter
+      - POSTGRES_DB=upserter
+    ports:
+      - 5432:5432
+  upserter:
+    image: upserter
+    container_name: upserter
+    restart: "no"
+    depends_on:
+      - postgres
+    build: ./upserter
+    ports:
+      - 8080:8080
+    environment:
+      - DB_PASSWORD=bazinga
+  sender:
+    image: sender
+    container_name: sender
+    restart: "no"
+    depends_on:
+      - upserter
+    build: ./sender
+    volumes:
+      - ./sender-data:/data
+    environment:
+      - IN_FILE_PATH=/data/data.csv
