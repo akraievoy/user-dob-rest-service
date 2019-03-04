@@ -1,22 +1,17 @@
 package main
 
 import (
-	"log"
-	"github.com/akraievoy/tsv_load/proto"
 	"context"
-	"net"
-	"fmt"
-	"google.golang.org/grpc"
 	"database/sql"
-
+	"fmt"
+	"github.com/akraievoy/tsv_load/proto"
+	"github.com/akraievoy/tsv_load/service_utils"
 	_ "github.com/lib/pq"
+	"google.golang.org/grpc"
+	"log"
+	"net"
+	"time"
 )
-
-type mockDbRecord struct {
-	name  string
-	email string
-	phone string
-}
 
 type UpserterServer struct {
 	db *sql.DB
@@ -68,42 +63,27 @@ func (us *UpserterServer) Version(ctx context.Context, verReq *proto.VersionRequ
 }
 
 func main() {
+	mainContext, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	go service_utils.CancelOnTermSignal(cancelFunc)
+
 	uFlags, err := ParseUpserterFlags()
 	if err != nil {
 		log.Fatal("failed to parse arguments", err)
+	}
+
+	db, dbCloseFunc, err := initDatabaseConnPool(mainContext, uFlags)
+	if dbCloseFunc != nil {
+		defer dbCloseFunc()
+	}
+	if err != nil {
+		log.Fatal("failed to init DB connection pool: %v", err)
 	}
 
 	toBindTo := fmt.Sprintf("%s:%d", uFlags.BindHost, uFlags.BindPort)
 	listen, err := net.Listen("tcp", toBindTo)
 	if err != nil {
 		log.Fatalf("failed to bind to %s", toBindTo)
-	}
-
-	connStr :=
-		fmt.Sprintf(
-			"postgres://%s:%s@%s:%d/%s?sslmode=disable",
-			uFlags.DBUsername, uFlags.DBPassword, uFlags.DBHost, uFlags.DBPort, uFlags.DBName)
-
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		log.Fatalf("something is terribly fishy with db connection setup", err)
-	}
-
-	defer db.Close()
-
-	result, err := db.Exec(
-		"create table if not exists USERS (" +
-			"ID int not null primary key, " +
-			"NAME text not null, " +
-			"EMAIL text not null, " +
-			"COUNTRY_CODE text not null, " +
-			"MOBILE_NUMBER text not null " +
-			")",
-	)
-	if err != nil {
-		log.Fatal("failed to connect/create users table", err)
-	} else {
-		log.Printf("create table result: %v", result)
 	}
 
 	server := UpserterServer{db}
@@ -116,4 +96,53 @@ func main() {
 		log.Fatal("failed to serve %v", err)
 	}
 
+}
+
+func initDatabaseConnPool(mainContext context.Context, uFlags *UpserterFlags) (*sql.DB, func(), error) {
+	connStr :=
+		fmt.Sprintf(
+			"postgres://%s:%s@%s:%d/%s?sslmode=disable",
+			uFlags.DBUsername, uFlags.DBPassword, uFlags.DBHost, uFlags.DBPort, uFlags.DBName,
+		)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, nil, err
+	}
+	dbCloseFunc := func() {
+		err := db.Close()
+		if err != nil {
+			log.Printf("failure on closing DB: %v", err)
+		}
+	}
+
+	for {
+		err := db.PingContext(mainContext)
+		if err != nil {
+			log.Printf("database not available (will retry in 5 seconds): %v", err)
+			if service_utils.SleepCancellably(mainContext, time.Second*5) {
+				return db, dbCloseFunc, err
+			}
+		} else {
+			break
+		}
+	}
+
+	result, err := db.Exec(
+		"create table if not exists USERS (" +
+			"ID int not null primary key, " +
+			"NAME text not null, " +
+			"EMAIL text not null, " +
+			"COUNTRY_CODE text not null, " +
+			"MOBILE_NUMBER text not null " +
+			")",
+	)
+	if err == nil {
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			log.Printf("create table USER (if not exists), rows affected not available: %v", err)
+		} else {
+			log.Printf("create table USER (if not exists), %d rows affected", rowsAffected)
+		}
+	}
+	return db, dbCloseFunc, err
 }

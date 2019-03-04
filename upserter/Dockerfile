@@ -1,10 +1,6 @@
 FROM alpine:3.9
 
-RUN apk update && \
-  apk upgrade && \
-  apk add postgresql-client
-
-COPY upserter wait_for_postgres.sh /
+COPY upserter /
 
 ENV BIND_HOST=upserter
 ENV BIND_PORT=8080
@@ -15,5 +11,5 @@ ENV DB_PASSWORD=fillmein
 ENV DB_NAME=upserter
 
 CMD [ \
-  "/wait_for_postgres.sh", "/upserter" \
+  "/upserter" \
 ]
