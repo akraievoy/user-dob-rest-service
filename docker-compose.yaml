@@ -1,5 +1,16 @@
 version: "3"
 services:
+  verifier:
+    image: postgres:9.6.12
+    container_name: verifier
+    restart: "no"
+    environment:
+      - POSTGRES_PASSWORD=bazinga
+      - POSTGRES_USER=upserter
+      - POSTGRES_DB=upserter
+    volumes:
+      - ./verifier:/verifier
+    command: /verifier/verifier.sh
   postgres:
     image: postgres:9.6.12
     container_name: postgres
@@ -32,3 +43,4 @@ services:
       - ./sender-data:/data
     environment:
       - IN_FILE_PATH=/data/data.csv
+      - FINAL_SLEEP=90s

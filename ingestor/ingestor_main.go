@@ -60,6 +60,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to process data fully: %v", err)
 	}
+
+	log.Printf("sleeping for %v", iFlags.FinalSleep)
+	service_utils.SleepCancellably(sendContext, iFlags.FinalSleep)
 }
 
 func ingestorFunc(upserterClient proto.UpserterClient) func(ctx context.Context, rs []parser.Record) ([]uint64, error) {

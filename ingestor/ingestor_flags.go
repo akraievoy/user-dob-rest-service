@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"github.com/facebookgo/flagenv"
+	"time"
 )
 
 type IngestorFlags struct {
@@ -12,6 +13,7 @@ type IngestorFlags struct {
 	BatchSize         uint32
 	UpserterHost      string
 	UpserterPort      uint32
+	FinalSleep        time.Duration
 }
 
 func ParseSenderFlags() (*IngestorFlags, error) {
@@ -45,6 +47,12 @@ func ParseSenderFlags() (*IngestorFlags, error) {
 		"upserter service port to send your data to",
 	)
 
+	finalSleep := flag.Duration(
+		"final-sleep",
+		100*time.Millisecond,
+		"duration of final sleep",
+	)
+
 	flagenv.Parse()
 	flag.Parse()
 
@@ -67,5 +75,6 @@ func ParseSenderFlags() (*IngestorFlags, error) {
 		uint32(*batchSize),
 		*upserterUrl,
 		uint32(*upserterPort),
+		*finalSleep,
 	}, nil
 }
