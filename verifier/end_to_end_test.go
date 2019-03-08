@@ -46,7 +46,9 @@ func setupGlobal() (context.Context, func()) {
 	}
 
 	for {
-		timeout, _ := context.WithTimeout(ctx, time.Second*5)
+		timeout, cancelFunc := context.WithTimeout(ctx, time.Second*3)
+		defer cancelFunc()
+
 		err := db.PingContext(timeout)
 		if err == nil {
 			break
