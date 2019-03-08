@@ -10,8 +10,21 @@ import (
 	"google.golang.org/grpc"
 	"log"
 	"net"
+	"strings"
 	"time"
 )
+
+func userToUpsertArgs(u *proto.User) []interface{} {
+	countryCode, international := internationalizePhoneNumber(u.PhoneNumber)
+	return []interface{}{uint32(u.Id), u.Name, u.Email, countryCode, international}
+}
+
+func internationalizePhoneNumber(phoneNumberLocalFormat string) (countryCode string, phoneNumberInternational string) {
+	noOpenParens := strings.ReplaceAll(phoneNumberLocalFormat, "(", "")
+	noParens := strings.ReplaceAll(noOpenParens, ")", "")
+	noLeadingZero := strings.TrimPrefix(noParens, "0")
+	return "+44", noLeadingZero
+}
 
 type UpserterServer struct {
 	db *sql.DB
@@ -40,7 +53,7 @@ func (us *UpserterServer) Upsert(ctx context.Context, users *proto.UserBatch) (*
 	result := make([]*proto.UpsertFeedback, 0)
 	successes := 0
 	for _, u := range users.Batch {
-		_, err := stmt.Exec(uint32(u.Id), u.Name, u.Email, "", u.PhoneNumber)
+		_, err := stmt.Exec(userToUpsertArgs(u)...)
 		feedback := proto.UpsertFeedback{}
 		if err == nil {
 			feedback.Success = true

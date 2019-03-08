@@ -16,7 +16,7 @@ docker run --rm -it \
   -v "$(pwd)/go_pkg_mod/:/go/pkg/mod/" \
   -v "$(pwd):/tsv_load/" \
   go_build \
-  /bin/sh -c 'cd /tsv_load/ingestor && go build .'
+  /bin/sh -c 'cd /tsv_load/ingestor && go test . && go build .'
 
 echo "STEP 3: compiling upserter"
 
@@ -24,7 +24,7 @@ docker run --rm -it \
   -v "$(pwd)/go_pkg_mod/:/go/pkg/mod/" \
   -v "$(pwd):/tsv_load/" \
   go_build \
-  /bin/sh -c 'cd /tsv_load/upserter && go build .'
+  /bin/sh -c 'cd /tsv_load/upserter && go test . && go build .'
 
 echo "STEP 4: purging previously built and now untagged docker images"
 

@@ -91,6 +91,20 @@ func TestDamienRecordsUpserted(t *testing.T) {
 	awaitMinimum(t, query, expectedMinimum)
 }
 
+func TestRecordsHaveCountryCode(t *testing.T) {
+	query := "select count(*) from users where country_code='+44'"
+	expectedMinimum := 100
+
+	awaitMinimum(t, query, expectedMinimum)
+}
+
+func TestRecordsHaveNormalizedPhoneNumbers(t *testing.T) {
+	query := "select count(*) from users where mobile_number not like '0%' and mobile_number not like '(%'"
+	expectedMinimum := 100
+
+	awaitMinimum(t, query, expectedMinimum)
+}
+
 func awaitMinimum(t *testing.T, query string, expectedMinimum int) {
 	db := testCtx.Value(verifierCtxKeyDB).(*sql.DB)
 	retries := testCtx.Value(verifierCtxKeyRetries).(*uint8)
