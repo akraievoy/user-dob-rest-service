@@ -7,7 +7,7 @@ echo "STEP 1: compiling ingestor"
 docker run --rm -it \
   -v "$(pwd)/go_pkg_mod/:/go/pkg/mod/" \
   -v "$(pwd):/tsv_load/" \
-  golang:1.12.0-alpine3.9 \
+  go_build \
   /bin/sh -c 'cd /tsv_load/ingestor && go build .'
 
 echo "STEP 2: compiling upserter"
@@ -15,7 +15,7 @@ echo "STEP 2: compiling upserter"
 docker run --rm -it \
   -v "$(pwd)/go_pkg_mod/:/go/pkg/mod/" \
   -v "$(pwd):/tsv_load/" \
-  golang:1.12.0-alpine3.9 \
+  go_build \
   /bin/sh -c 'cd /tsv_load/upserter && go build .'
 
 echo "STEP 3: purging previously built dockers"
